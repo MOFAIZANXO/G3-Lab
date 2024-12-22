@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet } from 'react-native';
 import supabase from '../supabaseClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Course {
   id: string;
@@ -11,30 +12,39 @@ interface Course {
 const CoursesScreen = () => {
   const [courses, setCourses] = useState<Course[]>([]);
 
-  // Fetch courses from Supabase
+  // Fetch courses from Supabase or AsyncStorage
   const fetchCourses = async () => {
     try {
-      const { data, error } = await supabase.from('courses').select('*');
-
-      if (error) {
-        console.error('Error fetching courses:', error);
+      const localCourses = await AsyncStorage.getItem('courses');
+      if (localCourses) {
+        setCourses(JSON.parse(localCourses));
       } else {
-        console.log('Courses fetched:', data); // Log data to verify
-        if (data && data.length > 0) {
-          data.forEach((course) => console.log(course)); // Log each course for inspection
+        const { data, error } = await supabase.from('courses').select('*');
+  
+        if (error) {
+          console.error('Error fetching courses:', error);
+        } else {
+          console.log('Courses fetched from Supabase:', data);
+  
+          if (Array.isArray(data)) {
+            setCourses(data);
+            await AsyncStorage.setItem('courses', JSON.stringify(data));
+          } else {
+            console.error('Fetched data is not an array:', data);
+          }
         }
-        setCourses(data || []); // Ensure data is an array of Course objects
       }
     } catch (err) {
       console.error('Unexpected error:', err);
     }
   };
+  
 
   useEffect(() => {
     fetchCourses();
   }, []);
 
-  // Render each item
+  // Render each course item
   const renderItem = ({ item }: { item: Course }) => (
     <View style={styles.item}>
       <Text style={styles.title}>{item.title || 'No title available'}</Text>
@@ -44,12 +54,13 @@ const CoursesScreen = () => {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.heading}>Courses</Text>
       {courses.length === 0 ? (
         <Text>No courses available</Text>
       ) : (
         <FlatList
           data={courses}
-          keyExtractor={(item) => item.id || item.title || 'defaultKey'} // Fallback if id is missing
+          keyExtractor={(item) => item.id || item.title || 'defaultKey'}
           renderItem={renderItem}
         />
       )}
@@ -62,18 +73,23 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  heading: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'green', // Green color for the heading
+    marginBottom: 16,
+  },
   item: {
     marginBottom: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 8,
-    backgroundColor: '#f9f9f9', // Added background color to verify the item
+    backgroundColor: '#f9f9f9',
   },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333', // Ensure the text is visible
   },
   description: {
     fontSize: 14,
